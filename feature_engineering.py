@@ -1,15 +1,16 @@
-import yfinance as yf
-import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
 import numpy as np
+import yfinance as yf
+from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense, Dropout
+from tensorflow.keras.layers import LSTM, Dropout, Dense
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+import matplotlib.pyplot as plt
 
 
 ticker = '^GSPC'
 
 #features = date, close, high, low, open, and volume
-data = yf.download(ticker, start='2024-01-01', end='2025-01-01')
+data = yf.download(ticker, start='2004-01-01', end='2025-01-01')
 #get rid of multiIndex
 data.columns = data.columns.droplevel(1)
 
@@ -73,13 +74,16 @@ val_split = int(0.9 * len(X_train))
 X_val, y_val = X_train[val_split:], y_train[val_split:]
 X_train, y_train = X_train[:val_split], y_train[:val_split]
 
+
+#beginning of the lstm pipeline, each layer represents lstm computation
 model = Sequential()
+#50 memory cells to keep track of past inputs
 model.add(LSTM(units=50, return_sequences=True, input_shape=(X_train.shape[1], X_train.shape[2])))
+#prevent relying too much on a memory cell
 model.add(Dropout(0.2))
 model.add(LSTM(units=50))
 model.add(Dropout(0.2))
 model.add(Dense(1))
-
 model.compile(optimizer='adam', loss='mean_squared_error')
 
 history = model.fit(
@@ -90,12 +94,35 @@ history = model.fit(
 )
 
 
+# Predict scaled values
+y_pred_scaled = model.predict(X_test)
+
+# Convert predictions back to original price scale
+y_pred = scaler_y.inverse_transform(y_pred_scaled)
+y_actual = scaler_y.inverse_transform(y_test)
 
 
 # Check shapes
-print("X_train:", X_train.shape)
-print("y_train:", y_train.shape)
-print("X_val:", X_val.shape)
-print("y_val:", y_val.shape)
-print("X_test:", X_test.shape)
-print("y_test:", y_test.shape)
+# print("X_train:", X_train.shape)
+# print("y_train:", y_train.shape)
+# print("X_val:", X_val.shape)
+# print("y_val:", y_val.shape)
+# print("X_test:", X_test.shape)
+# print("y_test:", y_test.shape)
+
+mse = mean_squared_error(y_actual, y_pred)
+rmse = np.sqrt(mse)
+mae = mean_absolute_error(y_actual, y_pred)
+
+print(f"MSE: {mse:.4f}")
+print(f"RMSE: {rmse:.4f}")
+print(f"MAE: {mae:.4f}")
+
+plt.figure(figsize=(12,6))
+plt.plot(y_actual, color='blue', label='Actual Price')
+plt.plot(y_pred, color='red', label='Predicted Price')
+plt.title('S&P 500 Price Prediction')
+plt.xlabel('Test Sequence')
+plt.ylabel('Price')
+plt.legend()
+plt.show()
